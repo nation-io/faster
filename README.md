@@ -71,6 +71,10 @@ Optional Parameters (/:title?, /books/:title?, /books/:genre/:title?)
 
 Wildcards (\*, /books/\*, /books/:genre/\*)
 
+### WebSockets
+
+(TODO)
+
 ### POST read and return JSON
 
 ```typescript
