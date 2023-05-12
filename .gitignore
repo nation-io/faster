@@ -6,3 +6,6 @@ log.txt
 uploads
 my_uploads
 temp_uploads
+
+fast_storage.sqlite
+deno.lock
