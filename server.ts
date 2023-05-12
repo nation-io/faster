@@ -16,6 +16,7 @@ export type ContextResponse = {
   headers: Headers;
   status: number;
   statusText: string;
+  raw?: Response;
 };
 
 export class Context {
@@ -51,6 +52,7 @@ export class Context {
     headers: new Headers(),
     status: 200,
     statusText: "",
+    raw: undefined,
   };
   get conn() {
     return this.#conn;
@@ -273,6 +275,150 @@ export class Server {
             statusText: ctx.res.statusText,
           }),
         );
+      }
+    } catch (e) {
+      console.log(e);
+    }
+  }
+
+  public async listen(serverParams: any) {
+    const server = (serverParams.certFile || serverParams.port === 443)
+      ? Deno.listenTls(serverParams)
+      : Deno.listen(serverParams);
+    try {
+      for await (const conn of server) {
+        this.#handleRequest(conn);
+      }
+    } catch (e) {
+      console.log(e);
+      if (e.name === "NotConnected") {
+        await this.listen(serverParams);
+      }
+    }
+  }
+}
+
+export class WsServer {
+  // NOTE: This is transpiled into the constructor, therefore equivalent to this.routes = [];
+  #routes: Route[] = [];
+
+  // NOTE: Using .bind can significantly increase perf compared to arrow functions.
+  public all = this.#add.bind(this, "ALL");
+  public get = this.#add.bind(this, "GET");
+
+  public use(...handlers: RouteFn[]) {
+    this.#routes.push({
+      keys: [],
+      method: "ALL",
+      handlers,
+    });
+    return this;
+  }
+
+  #add(method: Method, route: string | RegExp, ...handlers: RouteFn[]) {
+    var {
+      keys,
+      pattern,
+    } = parse(route);
+    this.#routes.push({
+      keys,
+      method,
+      handlers,
+      pattern,
+    });
+    return this;
+  }
+
+  async #middlewareHandler(
+    fns: RouteFn[],
+    fnIndex: number,
+    ctx: Context,
+  ): Promise<void> {
+    if (fns[fnIndex] !== undefined) {
+      try {
+        await fns[fnIndex](
+          ctx,
+          async () => await this.#middlewareHandler(fns, fnIndex + 1, ctx),
+        );
+      } catch (e) {
+        ctx.error = e;
+      }
+    }
+  }
+
+  async #handleRequest(conn: Deno.Conn) {
+    try {
+      const httpConn = Deno.serveHttp(conn);
+      for await (const requestEvent of httpConn) {
+        const req = requestEvent.request;
+        const url = new URL(requestEvent.request.url);
+        const requestHandlers: RouteFn[] = [];
+        const params: Params = {};
+        const len = this.#routes.length;
+        var hasRoute = false;
+        for (var i = 0; i < len; i++) {
+          const r = this.#routes[i];
+          const keyLength = r.keys.length;
+          var matches: null | string[] = null;
+          if (
+            r.pattern === undefined ||
+            (req.method === r.method &&
+              (matches = r.pattern.exec(
+                url.pathname,
+              )))
+          ) {
+            if (r.pattern) {
+              hasRoute = true;
+              if (keyLength > 0) {
+                if (matches) {
+                  var inc = 0;
+                  while (inc < keyLength) {
+                    params[r.keys[inc]] = decodeURIComponent(matches[++inc]);
+                  }
+                }
+              }
+            }
+            requestHandlers.push(...r.handlers);
+          }
+        }
+        var ctx = new Context(
+          conn,
+          httpConn,
+          requestEvent,
+          params,
+          url,
+          req,
+          hasRoute,
+        );
+        await this.#middlewareHandler(requestHandlers, 0, ctx);
+        if (!ctx.error) {
+          try {
+            for (const p of ctx.postProcessors) {
+              await p(ctx);
+            }
+          } catch (e) {
+            ctx.error = e;
+          }
+        }
+        if (ctx.res.raw) {
+          await requestEvent.respondWith(
+            ctx.res.raw,
+          );
+        } else {
+          ctx.error = new Error("invalid ws response");
+        }
+
+        if (ctx.error) {
+          ctx.res.status = 500;
+          ctx.res.headers.set(
+            "Content-Type",
+            "application/json",
+          );
+          ctx.res.body = JSON.stringify({
+            msg: (ctx.error.message || ctx.error),
+            stack: ctx.error.stack,
+          });
+        }
       }
     } catch (e) {
       console.log(e);

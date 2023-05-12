@@ -14,7 +14,7 @@ export {
 } from "./middlewares/session.ts";
 export type { Session } from "./middlewares/session.ts";
 
-export { Context, parse, Server } from "./server.ts";
+export { Context, parse, Server, WsServer } from "./server.ts";
 
 export type {
   ContextResponse,
