@@ -305,6 +305,7 @@ export class WsServer {
   // NOTE: Using .bind can significantly increase perf compared to arrow functions.
   public all = this.#add.bind(this, "ALL");
   public get = this.#add.bind(this, "GET");
+  public options = this.#add.bind(this, "OPTIONS");
 
   public use(...handlers: RouteFn[]) {
     this.#routes.push({
