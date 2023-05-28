@@ -37,7 +37,7 @@ export class Context {
     params: Params,
     url: URL,
     req: Request,
-    hasRoute: boolean,
+    hasRoute: boolean
   ) {
     this.#conn = conn;
     this.#httpConn = httpConn;
@@ -88,7 +88,7 @@ export type NextFunc = () => Promise<void> | void;
 // Adapted from https://github.com/lukeed/regexparam/blob/master/src/index.js
 export function parse(
   str: RegExp | string,
-  loose?: boolean,
+  loose?: boolean
 ): { keys: string[]; pattern: RegExp } {
   if (str instanceof RegExp) return { keys: [], pattern: str };
   var c: string,
@@ -100,7 +100,7 @@ export function parse(
     arr: string[] = str.split("/");
   arr[0] || arr.shift();
 
-  while (tmp = arr.shift()) {
+  while ((tmp = arr.shift())) {
     c = tmp[0];
     if (c === "*") {
       keys.push("wild");
@@ -118,14 +118,11 @@ export function parse(
 
   return {
     keys: keys,
-    pattern: new RegExp("^" + pattern + (loose ? "(?=$|\/)" : "\/?$"), "i"),
+    pattern: new RegExp("^" + pattern + (loose ? "(?=$|/)" : "/?$"), "i"),
   };
 }
 
-export type RouteFn = (
-  ctx: Context,
-  next: NextFunc,
-) => Promise<void> | void;
+export type RouteFn = (ctx: Context, next: NextFunc) => Promise<void> | void;
 type RoutePattern = RegExp;
 type Method =
   | "ALL"
@@ -173,10 +170,7 @@ export class Server {
   }
 
   #add(method: Method, route: string | RegExp, ...handlers: RouteFn[]) {
-    var {
-      keys,
-      pattern,
-    } = parse(route);
+    var { keys, pattern } = parse(route);
     this.#routes.push({
       keys,
       method,
@@ -189,13 +183,13 @@ export class Server {
   async #middlewareHandler(
     fns: RouteFn[],
     fnIndex: number,
-    ctx: Context,
+    ctx: Context
   ): Promise<void> {
     if (fns[fnIndex] !== undefined) {
       try {
         await fns[fnIndex](
           ctx,
-          async () => await this.#middlewareHandler(fns, fnIndex + 1, ctx),
+          async () => await this.#middlewareHandler(fns, fnIndex + 1, ctx)
         );
       } catch (e) {
         ctx.error = e;
@@ -220,9 +214,7 @@ export class Server {
           if (
             r.pattern === undefined ||
             (req.method === r.method &&
-              (matches = r.pattern.exec(
-                url.pathname,
-              )))
+              (matches = r.pattern.exec(url.pathname)))
           ) {
             if (r.pattern) {
               hasRoute = true;
@@ -245,7 +237,7 @@ export class Server {
           params,
           url,
           req,
-          hasRoute,
+          hasRoute
         );
         await this.#middlewareHandler(requestHandlers, 0, ctx);
         if (!ctx.error) {
@@ -259,12 +251,9 @@ export class Server {
         }
         if (ctx.error) {
           ctx.res.status = 500;
-          ctx.res.headers.set(
-            "Content-Type",
-            "application/json",
-          );
+          ctx.res.headers.set("Content-Type", "application/json");
           ctx.res.body = JSON.stringify({
-            msg: (ctx.error.message || ctx.error),
+            msg: ctx.error.message || ctx.error,
             stack: ctx.error.stack,
           });
         }
@@ -273,18 +262,24 @@ export class Server {
             headers: ctx.res.headers,
             status: ctx.res.status,
             statusText: ctx.res.statusText,
-          }),
+          })
         );
       }
     } catch (e) {
       console.log(e);
+      try {
+        conn.close();
+      } catch {
+        // do nothing
+      }
     }
   }
 
   public async listen(serverParams: any) {
-    const server = (serverParams.certFile || serverParams.port === 443)
-      ? Deno.listenTls(serverParams)
-      : Deno.listen(serverParams);
+    const server =
+      serverParams.certFile || serverParams.port === 443
+        ? Deno.listenTls(serverParams)
+        : Deno.listen(serverParams);
     try {
       for await (const conn of server) {
         this.#handleRequest(conn);
@@ -317,10 +312,7 @@ export class WsServer {
   }
 
   #add(method: Method, route: string | RegExp, ...handlers: RouteFn[]) {
-    var {
-      keys,
-      pattern,
-    } = parse(route);
+    var { keys, pattern } = parse(route);
     this.#routes.push({
       keys,
       method,
@@ -333,13 +325,13 @@ export class WsServer {
   async #middlewareHandler(
     fns: RouteFn[],
     fnIndex: number,
-    ctx: Context,
+    ctx: Context
   ): Promise<void> {
     if (fns[fnIndex] !== undefined) {
       try {
         await fns[fnIndex](
           ctx,
-          async () => await this.#middlewareHandler(fns, fnIndex + 1, ctx),
+          async () => await this.#middlewareHandler(fns, fnIndex + 1, ctx)
         );
       } catch (e) {
         ctx.error = e;
@@ -364,9 +356,7 @@ export class WsServer {
           if (
             r.pattern === undefined ||
             (req.method === r.method &&
-              (matches = r.pattern.exec(
-                url.pathname,
-              )))
+              (matches = r.pattern.exec(url.pathname)))
           ) {
             if (r.pattern) {
               hasRoute = true;
@@ -389,7 +379,7 @@ export class WsServer {
           params,
           url,
           req,
-          hasRoute,
+          hasRoute
         );
         await this.#middlewareHandler(requestHandlers, 0, ctx);
         if (!ctx.error) {
@@ -402,34 +392,35 @@ export class WsServer {
           }
         }
         if (ctx.res.raw) {
-          await requestEvent.respondWith(
-            ctx.res.raw,
-          );
+          await requestEvent.respondWith(ctx.res.raw);
         } else {
           ctx.error = new Error("invalid ws response");
         }
 
         if (ctx.error) {
           ctx.res.status = 500;
-          ctx.res.headers.set(
-            "Content-Type",
-            "application/json",
-          );
+          ctx.res.headers.set("Content-Type", "application/json");
           ctx.res.body = JSON.stringify({
-            msg: (ctx.error.message || ctx.error),
+            msg: ctx.error.message || ctx.error,
             stack: ctx.error.stack,
           });
         }
       }
     } catch (e) {
       console.log(e);
+      try {
+        conn.close();
+      } catch {
+        // do nothing
+      }
     }
   }
 
   public async listen(serverParams: any) {
-    const server = (serverParams.certFile || serverParams.port === 443)
-      ? Deno.listenTls(serverParams)
-      : Deno.listen(serverParams);
+    const server =
+      serverParams.certFile || serverParams.port === 443
+        ? Deno.listenTls(serverParams)
+        : Deno.listen(serverParams);
     try {
       for await (const conn of server) {
         this.#handleRequest(conn);
