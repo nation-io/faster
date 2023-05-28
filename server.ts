@@ -200,6 +200,7 @@ export class Server {
   async #handleRequest(conn: Deno.Conn) {
     try {
       const httpConn = Deno.serveHttp(conn);
+      console.log("connected...", httpConn.rid);
       for await (const requestEvent of httpConn) {
         (async () => {
           const req = requestEvent.request;
