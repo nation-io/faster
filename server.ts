@@ -201,73 +201,75 @@ export class Server {
     try {
       const httpConn = Deno.serveHttp(conn);
       for await (const requestEvent of httpConn) {
-        const req = requestEvent.request;
-        const url = new URL(requestEvent.request.url);
-        const requestHandlers: RouteFn[] = [];
-        const params: Params = {};
-        const len = this.#routes.length;
-        var hasRoute = false;
-        for (var i = 0; i < len; i++) {
-          const r = this.#routes[i];
-          const keyLength = r.keys.length;
-          var matches: null | string[] = null;
-          if (
-            r.pattern === undefined ||
-            (req.method === r.method &&
-              (matches = r.pattern.exec(url.pathname)))
-          ) {
-            if (r.pattern) {
-              hasRoute = true;
-              if (keyLength > 0) {
-                if (matches) {
-                  var inc = 0;
-                  while (inc < keyLength) {
-                    params[r.keys[inc]] = decodeURIComponent(matches[++inc]);
+        (async () => {
+          const req = requestEvent.request;
+          const url = new URL(requestEvent.request.url);
+          const requestHandlers: RouteFn[] = [];
+          const params: Params = {};
+          const len = this.#routes.length;
+          var hasRoute = false;
+          for (var i = 0; i < len; i++) {
+            const r = this.#routes[i];
+            const keyLength = r.keys.length;
+            var matches: null | string[] = null;
+            if (
+              r.pattern === undefined ||
+              (req.method === r.method &&
+                (matches = r.pattern.exec(url.pathname)))
+            ) {
+              if (r.pattern) {
+                hasRoute = true;
+                if (keyLength > 0) {
+                  if (matches) {
+                    var inc = 0;
+                    while (inc < keyLength) {
+                      params[r.keys[inc]] = decodeURIComponent(matches[++inc]);
+                    }
                   }
                 }
               }
+              requestHandlers.push(...r.handlers);
             }
-            requestHandlers.push(...r.handlers);
           }
-        }
-        var ctx = new Context(
-          conn,
-          httpConn,
-          requestEvent,
-          params,
-          url,
-          req,
-          hasRoute
-        );
-        await this.#middlewareHandler(requestHandlers, 0, ctx);
-        if (!ctx.error) {
-          try {
-            for (const p of ctx.postProcessors) {
-              await p(ctx);
-            }
-          } catch (e) {
-            ctx.error = e;
-          }
-        }
-        if (ctx.error) {
-          ctx.res.status = 500;
-          ctx.res.headers.set("Content-Type", "application/json");
-          ctx.res.body = JSON.stringify({
-            msg: ctx.error.message || ctx.error,
-            stack: ctx.error.stack,
-          });
-        }
-        try {
-          await requestEvent.respondWith(
-            new Response(ctx.res.body, {
-              headers: ctx.res.headers,
-              status: ctx.res.status,
-              statusText: ctx.res.statusText,
-            })
+          var ctx = new Context(
+            conn,
+            httpConn,
+            requestEvent,
+            params,
+            url,
+            req,
+            hasRoute
           );
-        } catch {
-          continue;
-        }
+          await this.#middlewareHandler(requestHandlers, 0, ctx);
+          if (!ctx.error) {
+            try {
+              for (const p of ctx.postProcessors) {
+                await p(ctx);
+              }
+            } catch (e) {
+              ctx.error = e;
+            }
+          }
+          if (ctx.error) {
+            ctx.res.status = 500;
+            ctx.res.headers.set("Content-Type", "application/json");
+            ctx.res.body = JSON.stringify({
+              msg: ctx.error.message || ctx.error,
+              stack: ctx.error.stack,
+            });
+          }
+          try {
+            requestEvent.respondWith(
+              new Response(ctx.res.body, {
+                headers: ctx.res.headers,
+                status: ctx.res.status,
+                statusText: ctx.res.statusText,
+              })
+            );
+          } catch {
+            console.log("conn closed");
+          }
+        })();
       }
     } catch (e) {
       console.log(e);
