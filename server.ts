@@ -257,13 +257,17 @@ export class Server {
             stack: ctx.error.stack,
           });
         }
-        await requestEvent.respondWith(
-          new Response(ctx.res.body, {
-            headers: ctx.res.headers,
-            status: ctx.res.status,
-            statusText: ctx.res.statusText,
-          })
-        );
+        try {
+          await requestEvent.respondWith(
+            new Response(ctx.res.body, {
+              headers: ctx.res.headers,
+              status: ctx.res.status,
+              statusText: ctx.res.statusText,
+            })
+          );
+        } catch {
+          continue;
+        }
       }
     } catch (e) {
       console.log(e);
@@ -392,7 +396,11 @@ export class WsServer {
           }
         }
         if (ctx.res.raw) {
-          await requestEvent.respondWith(ctx.res.raw);
+          try {
+            await requestEvent.respondWith(ctx.res.raw);
+          } catch {
+            continue;
+          }
         } else {
           ctx.error = new Error("invalid ws response");
         }
