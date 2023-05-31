@@ -415,7 +415,7 @@ export class WsServer {
     // since this ws/wss is a http/1.1 proto, we should close
     // this connection as tcp multiplexing is **not** supported.
     try {
-      conn.close();
+      // conn.close();
     } catch {
       // do nothing
     }
