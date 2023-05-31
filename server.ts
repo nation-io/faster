@@ -402,28 +402,22 @@ export class WsServer {
           try {
             await requestEvent.respondWith(ctx.res.raw);
           } catch {
-            continue;
+            console.log("conn closed");
           }
         } else {
           ctx.error = new Error("invalid ws response");
         }
-
-        if (ctx.error) {
-          ctx.res.status = 500;
-          ctx.res.headers.set("Content-Type", "application/json");
-          ctx.res.body = JSON.stringify({
-            msg: ctx.error.message || ctx.error,
-            stack: ctx.error.stack,
-          });
-        }
       }
     } catch (e) {
       console.log(e);
-      try {
-        conn.close();
-      } catch {
-        // do nothing
-      }
+    }
+
+    // since this ws/wss is a http/1.1 proto, we should close
+    // this connection as tcp multiplexing is **not** supported.
+    try {
+      conn.close();
+    } catch {
+      // do nothing
     }
   }
 
